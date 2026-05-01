@@ -83,7 +83,7 @@ function movePlayerByVector(state: GameState, vector: Position, distance: number
 function placeBomb(state: GameState): GameState {
   const config = bombConfigs[state.selectedBombType];
   const activeOfType = state.bombs.filter((bomb) => bomb.type === state.selectedBombType).length;
-  const position = snapToCellCenter(state.player.position);
+  const position = getBombPlacement(state);
 
   if (state.phase !== "playing" || activeOfType >= config.limit) {
     return state;
@@ -106,6 +106,31 @@ function placeBomb(state: GameState): GameState {
       },
     ],
   };
+}
+
+function getBombPlacement(state: GameState): Position {
+  const playerCell = snapToCellCenter(state.player.position);
+  const movement = state.input;
+  const opposite = movement.x !== 0 || movement.y !== 0 ? normalize({ x: -movement.x, y: -movement.y }) : { x: 0, y: 0 };
+  const candidates = [
+    snapToCellCenter(add(state.player.position, opposite, 0.9)),
+    snapToCellCenter(state.player.position),
+    { x: playerCell.x - 1, y: playerCell.y },
+    { x: playerCell.x + 1, y: playerCell.y },
+    { x: playerCell.x, y: playerCell.y - 1 },
+    { x: playerCell.x, y: playerCell.y + 1 },
+  ] satisfies readonly Position[];
+
+  return candidates.find((candidate) => canPlaceBombAt(state, candidate)) ?? playerCell;
+}
+
+function canPlaceBombAt(state: GameState, position: Position): boolean {
+  return (
+    isInside(state, position) &&
+    getTileDefinition(tileAt(state, position)).passable &&
+    !state.bombs.some((bomb) => sameCell(bomb.position, position)) &&
+    distance(position, state.player.position) >= actorRadius + bombRadius
+  );
 }
 
 function updateEnemies(state: GameState, deltaMs: number): GameState {
@@ -311,4 +336,3 @@ function normalize(vector: Position): Position {
 function hasWon(state: GameState): boolean {
   return state.totalCrates > 0 && state.clearedCrates >= state.totalCrates && state.player.alive;
 }
-

@@ -36,4 +36,21 @@ describe("game reducer", () => {
     expect(state.score).toBe(600);
     expect(state.phase).toBe("won");
   });
+
+  it("does not trap the player inside a freshly placed bomb", () => {
+    let state = reduceGame(createGameState(tinyMap), { type: "start" });
+    state = reduceGame(state, { type: "setMovement", vector: { x: 1, y: 0 } });
+    state = reduceGame(state, { type: "tick", deltaMs: 180 });
+    state = reduceGame(state, { type: "placeBomb" });
+
+    const beforeMove = state.player.position;
+    state = reduceGame(state, { type: "setMovement", vector: { x: 0, y: 1 } });
+    state = reduceGame(state, { type: "tick", deltaMs: 180 });
+
+    expect(state.bombs[0]?.position).not.toEqual({
+      x: Math.floor(beforeMove.x) + 0.5,
+      y: Math.floor(beforeMove.y) + 0.5,
+    });
+    expect(state.player.position.y).toBeGreaterThan(beforeMove.y);
+  });
 });
