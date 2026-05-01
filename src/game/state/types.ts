@@ -3,6 +3,9 @@ import type { LegacyMap } from "../map/legacyMapParser";
 export type Direction = "up" | "down" | "left" | "right";
 export type Phase = "ready" | "playing" | "won" | "lost";
 export type BombType = "standard" | "quick" | "mega";
+export type BombOwner = "player" | "enemy";
+export type ExplosionEffect = "damage" | "stun";
+export type EnemyType = "chaser" | "bomber";
 
 export type Position = {
   readonly x: number;
@@ -16,15 +19,19 @@ export type Player = {
 
 export type Enemy = {
   readonly id: string;
+  readonly type: EnemyType;
   readonly position: Position;
   readonly direction: Position;
   readonly thinkMs: number;
+  readonly stunnedMs: number;
+  readonly bombCooldownMs: number;
   readonly alive: boolean;
 };
 
 export type Bomb = {
   readonly id: string;
   readonly type: BombType;
+  readonly owner: BombOwner;
   readonly position: Position;
   readonly timerMs: number;
   readonly range: number;
@@ -32,6 +39,7 @@ export type Bomb = {
 
 export type Explosion = {
   readonly id: string;
+  readonly effect: ExplosionEffect;
   readonly cells: readonly Position[];
   readonly timerMs: number;
 };

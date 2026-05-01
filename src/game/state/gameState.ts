@@ -54,9 +54,12 @@ function findEnemySpawns(map: LegacyMap, playerStart: Position): readonly GameSt
 
       spawns.push({
         id: `enemy-${spawns.length + 1}`,
+        type: spawns.length % 2 === 0 ? "chaser" : "bomber",
         position,
         direction: { x: -1, y: 0 },
         thinkMs: 400 + spawns.length * 250,
+        stunnedMs: 0,
+        bombCooldownMs: 1000 + spawns.length * 600,
         alive: true,
       });
     }

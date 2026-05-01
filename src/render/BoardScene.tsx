@@ -2,7 +2,7 @@ import { OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo } from "react";
 import { getTileDefinition } from "../game/map/tileCatalog";
-import type { BombType, GameInput, GameState, Position } from "../game/state/types";
+import type { BombType, EnemyType, ExplosionEffect, GameInput, GameState, Position } from "../game/state/types";
 
 type BoardSceneProps = {
   readonly state: GameState;
@@ -48,12 +48,12 @@ function Board({ state }: { readonly state: GameState }) {
         <BombMesh key={bomb.id} position={bomb.position} type={bomb.type} />
       ))}
       {state.explosions.flatMap((explosion) =>
-        explosion.cells.map((cell) => <ExplosionMesh key={`${explosion.id}-${cell.x}-${cell.y}`} position={cell} />),
+        explosion.cells.map((cell) => <ExplosionMesh key={`${explosion.id}-${cell.x}-${cell.y}`} position={cell} effect={explosion.effect} />),
       )}
       {state.enemies
         .filter((enemy) => enemy.alive)
         .map((enemy) => (
-          <EnemyMesh key={enemy.id} position={enemy.position} />
+          <EnemyMesh key={enemy.id} position={enemy.position} type={enemy.type} stunned={enemy.stunnedMs > 0} />
         ))}
       <PlayerMesh position={state.player.position} alive={state.player.alive} />
     </group>
@@ -106,33 +106,46 @@ function PlayerMesh({ position, alive }: { readonly position: Position; readonly
 function BombMesh({ position, type }: { readonly position: Position; readonly type: BombType }) {
   const colorByType = {
     standard: "#080808",
-    quick: "#1d4ed8",
+    quick: "#2563eb",
     mega: "#7f1d1d",
   } as const satisfies Record<BombType, string>;
+  const scaleByType = {
+    standard: [1, 1, 1],
+    quick: [0.78, 0.78, 0.78],
+    mega: [1.25, 1.25, 1.25],
+  } as const satisfies Record<BombType, readonly [number, number, number]>;
 
   return (
-    <mesh castShadow position={[position.x, 0.34, position.y]}>
+    <mesh castShadow position={[position.x, 0.34, position.y]} scale={scaleByType[type]}>
       <sphereGeometry args={[0.28, 24, 24]} />
       <meshStandardMaterial color={colorByType[type]} roughness={0.28} metalness={0.35} />
     </mesh>
   );
 }
 
-function EnemyMesh({ position }: { readonly position: Position }) {
+function EnemyMesh({ position, type, stunned }: { readonly position: Position; readonly type: EnemyType; readonly stunned: boolean }) {
+  const color = stunned ? "#60a5fa" : type === "bomber" ? "#f97316" : "#dc2626";
+
   return (
     <mesh castShadow position={[position.x, 0.32, position.y]}>
-      <boxGeometry args={[0.48, 0.56, 0.48]} />
-      <meshStandardMaterial color="#dc2626" roughness={0.5} />
+      {type === "bomber" ? <dodecahedronGeometry args={[0.34, 0]} /> : <boxGeometry args={[0.48, 0.56, 0.48]} />}
+      <meshStandardMaterial color={color} roughness={0.5} />
     </mesh>
   );
 }
 
-function ExplosionMesh({ position }: { readonly position: Position }) {
-  const material = useMemo(() => ({ color: "#fb923c", emissive: "#f97316", emissiveIntensity: 1.4 }), []);
+function ExplosionMesh({ position, effect }: { readonly position: Position; readonly effect: ExplosionEffect }) {
+  const material = useMemo(
+    () =>
+      effect === "stun"
+        ? { color: "#60a5fa", emissive: "#2563eb", emissiveIntensity: 1.3 }
+        : { color: "#fb923c", emissive: "#f97316", emissiveIntensity: 1.4 },
+    [effect],
+  );
 
   return (
     <mesh position={[position.x, 0.16, position.y]}>
-      <boxGeometry args={[0.88, 0.18, 0.88]} />
+      {effect === "stun" ? <cylinderGeometry args={[0.44, 0.44, 0.12, 24]} /> : <boxGeometry args={[0.88, 0.18, 0.88]} />}
       <meshStandardMaterial {...material} transparent opacity={0.82} />
     </mesh>
   );

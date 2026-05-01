@@ -1,18 +1,30 @@
 import { getTileDefinition } from "../map/tileCatalog";
 import { createGameState } from "./gameState";
-import type { BombType, Direction, Enemy, Explosion, GameInput, GameState, Position } from "./types";
+import type { BombOwner, BombType, Direction, Enemy, Explosion, GameInput, GameState, Position } from "./types";
 
 const explosionMs = 520;
 const playerSpeed = 4.2;
 const enemySpeed = 2.15;
 const actorRadius = 0.28;
 const enemyTouchRadius = 0.48;
+const stunMs = 1700;
 
 const bombConfigs = {
-  standard: { fuseMs: 1800, range: 3, limit: 1, score: 100 },
-  quick: { fuseMs: 900, range: 2, limit: 2, score: 80 },
-  mega: { fuseMs: 2400, range: 5, limit: 1, score: 140 },
-} as const satisfies Record<BombType, { readonly fuseMs: number; readonly range: number; readonly limit: number; readonly score: number }>;
+  standard: { fuseMs: 1800, range: 3, limit: 1, score: 100, shape: "cross", effect: "damage", destroysBlocks: true },
+  quick: { fuseMs: 750, range: 1, limit: 2, score: 0, shape: "radius", effect: "stun", destroysBlocks: false },
+  mega: { fuseMs: 2400, range: 5, limit: 1, score: 140, shape: "cross", effect: "damage", destroysBlocks: true },
+} as const satisfies Record<
+  BombType,
+  {
+    readonly fuseMs: number;
+    readonly range: number;
+    readonly limit: number;
+    readonly score: number;
+    readonly shape: "cross" | "radius";
+    readonly effect: "damage" | "stun";
+    readonly destroysBlocks: boolean;
+  }
+>;
 
 export function reduceGame(state: GameState, input: GameInput): GameState {
   switch (input.type) {
@@ -92,19 +104,7 @@ function placeBomb(state: GameState): GameState {
     return state;
   }
 
-  return {
-    ...state,
-    bombs: [
-      ...state.bombs,
-      {
-        id: `bomb-${state.elapsedMs}-${position.x}-${position.y}`,
-        type: state.selectedBombType,
-        position,
-        timerMs: config.fuseMs,
-        range: config.range,
-      },
-    ],
-  };
+  return addBomb(state, state.selectedBombType, position, "player");
 }
 
 function getBombPlacement(state: GameState): Position {
@@ -125,25 +125,40 @@ function canPlaceBombAt(state: GameState, position: Position): boolean {
 }
 
 function updateEnemies(state: GameState, deltaMs: number): GameState {
+  let nextState = state;
   const enemies = state.enemies.map((enemy) => {
     if (!enemy.alive) {
       return enemy;
     }
 
-    const nextThinkMs = enemy.thinkMs - deltaMs;
-    const direction = nextThinkMs <= 0 ? chooseEnemyDirection(state, enemy) : enemy.direction;
-    const position = moveWithCollision(state, enemy.position, direction, (deltaMs / 1000) * enemySpeed);
-    const stuck = samePosition(position, enemy.position);
+    if (enemy.stunnedMs > 0) {
+      return { ...enemy, stunnedMs: Math.max(0, enemy.stunnedMs - deltaMs), bombCooldownMs: Math.max(0, enemy.bombCooldownMs - deltaMs) };
+    }
+
+    let nextEnemy = { ...enemy, bombCooldownMs: Math.max(0, enemy.bombCooldownMs - deltaMs) };
+    if (nextEnemy.type === "bomber" && nextEnemy.bombCooldownMs <= 0 && distance(nextEnemy.position, nextState.player.position) <= 4.25) {
+      const bombPosition = snapToCellCenter(nextEnemy.position);
+      const withBomb = addBomb(nextState, "standard", bombPosition, "enemy");
+      if (withBomb !== nextState) {
+        nextState = withBomb;
+        nextEnemy = { ...nextEnemy, bombCooldownMs: 2600 };
+      }
+    }
+
+    const nextThinkMs = nextEnemy.thinkMs - deltaMs;
+    const direction = nextThinkMs <= 0 ? chooseEnemyDirection(nextState, nextEnemy) : nextEnemy.direction;
+    const position = moveWithCollision(nextState, nextEnemy.position, direction, (deltaMs / 1000) * enemySpeed);
+    const stuck = samePosition(position, nextEnemy.position);
 
     return {
-      ...enemy,
+      ...nextEnemy,
       position,
-      direction: stuck ? chooseEnemyDirection(state, enemy) : direction,
-      thinkMs: stuck || nextThinkMs <= 0 ? 450 + ((state.elapsedMs + enemy.id.length * 97) % 700) : nextThinkMs,
+      direction: stuck ? chooseEnemyDirection(nextState, nextEnemy) : direction,
+      thinkMs: stuck || nextThinkMs <= 0 ? 450 + ((nextState.elapsedMs + nextEnemy.id.length * 97) % 700) : nextThinkMs,
     };
   });
 
-  return { ...state, enemies };
+  return { ...nextState, enemies };
 }
 
 function chooseEnemyDirection(state: GameState, enemy: Enemy): Position {
@@ -165,8 +180,8 @@ function chooseEnemyDirection(state: GameState, enemy: Enemy): Position {
 }
 
 function applyExplosion(state: GameState, bomb: GameState["bombs"][number]): GameState {
-  const cells = getExplosionCells(state, bomb.position, bomb.range);
   const config = bombConfigs[bomb.type];
+  const cells = getExplosionCells(state, bomb.position, bomb.range, config.shape);
   let cleared = 0;
   const tiles = state.tiles.map((row, y) =>
     row.map((tile, x) => {
@@ -174,7 +189,7 @@ function applyExplosion(state: GameState, bomb: GameState["bombs"][number]): Gam
         return tile;
       }
 
-      if (getTileDefinition(tile).destructible) {
+      if (config.destroysBlocks && getTileDefinition(tile).destructible) {
         cleared += 1;
         return 0;
       }
@@ -185,6 +200,7 @@ function applyExplosion(state: GameState, bomb: GameState["bombs"][number]): Gam
 
   const explosion: Explosion = {
     id: `explosion-${bomb.id}`,
+    effect: config.effect,
     cells,
     timerMs: explosionMs,
   };
@@ -199,18 +215,26 @@ function applyExplosion(state: GameState, bomb: GameState["bombs"][number]): Gam
 }
 
 function applyActorDamage(state: GameState): GameState {
-  const playerInExplosion = state.explosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, state.player.position)));
+  const damageExplosions = state.explosions.filter((explosion) => explosion.effect === "damage");
+  const stunExplosions = state.explosions.filter((explosion) => explosion.effect === "stun");
+  const playerInExplosion = damageExplosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, state.player.position)));
   const enemyTouchedPlayer = state.enemies.some(
-    (enemy) => enemy.alive && distance(enemy.position, state.player.position) <= enemyTouchRadius,
+    (enemy) => enemy.alive && enemy.stunnedMs <= 0 && distance(enemy.position, state.player.position) <= enemyTouchRadius,
   );
   const enemiesKilled = state.enemies.filter(
-    (enemy) => enemy.alive && state.explosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, enemy.position))),
+    (enemy) => enemy.alive && damageExplosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, enemy.position))),
   ).length;
-  const enemies = state.enemies.map((enemy) =>
-    state.explosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, enemy.position)))
-      ? { ...enemy, alive: false }
-      : enemy,
-  );
+  const enemies = state.enemies.map((enemy) => {
+    if (damageExplosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, enemy.position)))) {
+      return { ...enemy, alive: false };
+    }
+
+    if (stunExplosions.some((explosion) => explosion.cells.some((cell) => containsPosition(cell, enemy.position)))) {
+      return { ...enemy, stunnedMs: Math.max(enemy.stunnedMs, stunMs) };
+    }
+
+    return enemy;
+  });
 
   return {
     ...state,
@@ -221,8 +245,25 @@ function applyActorDamage(state: GameState): GameState {
   };
 }
 
-function getExplosionCells(state: GameState, origin: Position, range: number): readonly Position[] {
+function getExplosionCells(state: GameState, origin: Position, range: number, shape: "cross" | "radius"): readonly Position[] {
   const cells: Position[] = [snapToCellCenter(origin)];
+  if (shape === "radius") {
+    for (let y = -range; y <= range; y += 1) {
+      for (let x = -range; x <= range; x += 1) {
+        if (Math.abs(x) + Math.abs(y) > range || (x === 0 && y === 0)) {
+          continue;
+        }
+
+        const cursor = { x: cells[0].x + x, y: cells[0].y + y };
+        if (isInside(state, cursor) && getTileDefinition(tileAt(state, cursor)).passable) {
+          cells.push(cursor);
+        }
+      }
+    }
+
+    return cells;
+  }
+
   const directions = [
     { x: 0, y: -1 },
     { x: 0, y: 1 },
@@ -247,6 +288,28 @@ function getExplosionCells(state: GameState, origin: Position, range: number): r
   }
 
   return cells;
+}
+
+function addBomb(state: GameState, type: BombType, position: Position, owner: BombOwner): GameState {
+  const config = bombConfigs[type];
+  if (!canPlaceBombAt(state, position)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    bombs: [
+      ...state.bombs,
+      {
+        id: `${owner}-bomb-${type}-${state.elapsedMs}-${position.x}-${position.y}`,
+        type,
+        owner,
+        position,
+        timerMs: config.fuseMs,
+        range: config.range,
+      },
+    ],
+  };
 }
 
 function moveWithCollision(state: GameState, position: Position, vector: Position, distanceValue: number): Position {

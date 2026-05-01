@@ -404,13 +404,14 @@ Acceptance:
 - Explosions stop at non-passable blockers.
 - Explosion rendering is purely visual.
 
-Update: standard, quick, and mega bombs are implemented with different fuse, range, limit, and scoring values.
+Update: standard, quick, and mega bombs are implemented with different fuse, range, limit, scoring, shape, and effect values. Standard and mega are damaging cross blasts. Quick is a round stun pulse that disables enemies without clearing blocks.
 
 ### Phase 6B: AI Opponents And Random Maps
 
 Deliverables:
 
 - Add simple AI opponents that move in continuous board space and chase the player conservatively.
+- Add enemy behavior types, including basic chasers and bombers that can place bombs.
 - Add random map generation with preserved outer walls, legacy crate semantics, and an open starter route.
 - Keep random maps compatible with the same `LegacyMap` shape as file-backed maps.
 
@@ -418,6 +419,7 @@ Acceptance:
 
 - AI opponents can kill the player on contact.
 - AI opponents can be killed by explosions.
+- Bomber AI can place real bombs.
 - Random maps do not block the player's initial movement.
 - Random maps use the same renderer and reducer paths as legacy maps.
 

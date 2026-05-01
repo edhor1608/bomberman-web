@@ -248,7 +248,7 @@ function GameScreen({
         </div>
         <div>
           <strong>{state.selectedBombType}</strong>
-          <span>Bomb</span>
+          <span>Bomb 1/2/3</span>
         </div>
         <button type="button" className="secondary" onClick={onExit}>
           Menu
@@ -282,9 +282,9 @@ function GameScreen({
           Down
         </button>
         <select value={state.selectedBombType} onChange={(event) => dispatch({ type: "selectBomb", bombType: event.target.value as BombType })}>
-          <option value="standard">Standard</option>
-          <option value="quick">Quick</option>
-          <option value="mega">Mega</option>
+          <option value="standard">1 Standard cross</option>
+          <option value="quick">2 Quick stun</option>
+          <option value="mega">3 Mega cross</option>
         </select>
       </footer>
     </section>

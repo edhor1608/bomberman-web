@@ -10,10 +10,10 @@ The goal is preservation through modernization: keep the identity, old maps, and
 - Generates playable random maps with an open starter route.
 - Renders maps as a 2.5D Three.js board.
 - Moves the player continuously across the board with camera-relative input.
-- Includes three working bomb types: standard, quick, and mega.
+- Includes three working bomb types: standard cross damage, quick round stun pulse, and mega long cross damage.
 - Explodes bombs on grid lines.
 - Clears destructible legacy block tiles.
-- Spawns simple AI opponents that chase the player and can be destroyed.
+- Spawns AI opponents with different behavior: chasers pursue the player, bombers can place bombs.
 - Tracks score and persisted highscores in browser storage.
 - Includes keyboard and on-screen controls.
 
@@ -41,9 +41,9 @@ pnpm build
 
 - Arrow keys or WASD: camera-relative movement
 - Space: place bomb
-- 1: standard bomb
-- 2: quick bomb
-- 3: mega bomb
+- 1: standard cross bomb
+- 2: quick round stun bomb
+- 3: mega long cross bomb
 - Escape: return to menu
 
 Touch and mouse users can use the on-screen controls.

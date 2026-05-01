@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseLegacyMap } from "../map/legacyMapParser";
 import { createGameState } from "./gameState";
 import { reduceGame } from "./gameReducer";
+import type { GameState } from "./types";
 
 const tinyMap = parseLegacyMap(
   `
@@ -86,13 +87,16 @@ describe("game reducer", () => {
       enemies: [
         {
           id: "enemy-test",
+          type: "chaser",
           position: { x: 5.5, y: 1.5 },
           direction: { x: 0, y: 0 },
           thinkMs: 0,
+          stunnedMs: 0,
+          bombCooldownMs: 1000,
           alive: true,
         },
       ],
-    };
+    } satisfies GameState;
 
     const ticked = reduceGame(state, { type: "tick", deltaMs: 250 });
 
@@ -107,13 +111,16 @@ describe("game reducer", () => {
       enemies: [
         {
           id: "enemy-touching",
+          type: "chaser",
           position: { x: 2.75, y: 2.5 },
           direction: { x: 0, y: 0 },
           thinkMs: 1000,
+          stunnedMs: 0,
+          bombCooldownMs: 1000,
           alive: true,
         },
       ],
-    };
+    } satisfies GameState;
 
     const ticked = reduceGame(state, { type: "tick", deltaMs: 16 });
 
@@ -129,14 +136,17 @@ describe("game reducer", () => {
       enemies: [
         {
           id: "enemy-in-blast",
+          type: "chaser",
           position: { x: 3.5, y: 2.5 },
           direction: { x: 0, y: 0 },
           thinkMs: 1000,
+          stunnedMs: 0,
+          bombCooldownMs: 1000,
           alive: true,
         },
       ],
-      explosions: [{ id: "test-explosion", cells: [{ x: 3.5, y: 2.5 }], timerMs: 1000 }],
-    };
+      explosions: [{ id: "test-explosion", effect: "damage", cells: [{ x: 3.5, y: 2.5 }], timerMs: 1000 }],
+    } satisfies GameState;
 
     const ticked = reduceGame(state, { type: "tick", deltaMs: 16 });
 
@@ -150,8 +160,8 @@ describe("game reducer", () => {
     state = reduceGame(state, { type: "placeBomb" });
 
     expect(state.bombs[0]?.type).toBe("quick");
-    expect(state.bombs[0]?.timerMs).toBe(900);
-    expect(state.bombs[0]?.range).toBe(2);
+    expect(state.bombs[0]?.timerMs).toBe(750);
+    expect(state.bombs[0]?.range).toBe(1);
 
     state = { ...state, player: { ...state.player, position: { x: 3.5, y: 2.5 } } };
     state = reduceGame(state, { type: "placeBomb" });
@@ -173,5 +183,68 @@ describe("game reducer", () => {
 
     expect(standard.tiles[1]?.[6]).toBe(3);
     expect(mega.tiles[1]?.[6]).toBe(0);
+  });
+
+  it("uses quick bombs as round stun pulses without clearing crates", () => {
+    let state = reduceGame(createGameState(tinyMap), { type: "start" });
+    state = {
+      ...state,
+      selectedBombType: "quick",
+      enemies: [
+        {
+          id: "enemy-stunned",
+          type: "chaser",
+          position: { x: 2.5, y: 1.5 },
+          direction: { x: 0, y: 0 },
+          thinkMs: 1000,
+          stunnedMs: 0,
+          bombCooldownMs: 1000,
+          alive: true,
+        },
+      ],
+    };
+    state = reduceGame(state, { type: "placeBomb" });
+    state = reduceGame(state, { type: "tick", deltaMs: 800 });
+
+    expect(state.tiles[1]?.[3]).toBe(3);
+    expect(state.enemies[0]?.alive).toBe(true);
+    expect(state.enemies[0]?.stunnedMs).toBeGreaterThan(0);
+    expect(state.phase).toBe("playing");
+  });
+
+  it("lets bomber AI place real bombs while chaser AI only moves", () => {
+    const base = reduceGame(createGameState(openMap), { type: "start" });
+    const state = {
+      ...base,
+      player: { ...base.player, position: { x: 1.5, y: 1.5 } },
+      enemies: [
+        {
+          id: "enemy-bomber",
+          type: "bomber",
+          position: { x: 3.5, y: 1.5 },
+          direction: { x: 0, y: 0 },
+          thinkMs: 1000,
+          stunnedMs: 0,
+          bombCooldownMs: 0,
+          alive: true,
+        },
+        {
+          id: "enemy-chaser",
+          type: "chaser",
+          position: { x: 4.5, y: 2.5 },
+          direction: { x: 0, y: 0 },
+          thinkMs: 1000,
+          stunnedMs: 0,
+          bombCooldownMs: 0,
+          alive: true,
+        },
+      ],
+    } satisfies GameState;
+
+    const ticked = reduceGame(state, { type: "tick", deltaMs: 100 });
+
+    expect(ticked.bombs).toHaveLength(1);
+    expect(ticked.bombs[0]?.owner).toBe("enemy");
+    expect(ticked.bombs[0]?.type).toBe("standard");
   });
 });
