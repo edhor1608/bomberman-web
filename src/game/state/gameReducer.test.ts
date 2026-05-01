@@ -7,7 +7,7 @@ const tinyMap = parseLegacyMap(
   `
 1,1,1,1,1
 1,0,0,3,1
-1,0,1,4,1
+1,0,0,4,1
 1,1,1,1,1
 `,
   "tiny.map",
@@ -16,19 +16,20 @@ const tinyMap = parseLegacyMap(
 describe("game reducer", () => {
   it("moves only through passable grid cells", () => {
     const started = reduceGame(createGameState(tinyMap), { type: "start" });
-    const moved = reduceGame(started, { type: "move", direction: "right" });
-    const blocked = reduceGame(moved, { type: "move", direction: "right" });
+    const moved = reduceGame(started, { type: "setMovement", vector: { x: 1, y: 0 } });
+    const ticked = reduceGame(moved, { type: "tick", deltaMs: 250 });
+    const blocked = reduceGame(ticked, { type: "tick", deltaMs: 500 });
 
-    expect(moved.player.position).toEqual({ x: 2, y: 1 });
-    expect(blocked.player.position).toEqual({ x: 2, y: 1 });
+    expect(ticked.player.position.x).toBeGreaterThan(2);
+    expect(blocked.player.position.x).toBeLessThan(2.72);
   });
 
   it("places a bomb and clears destructible tiles", () => {
     let state = reduceGame(createGameState(tinyMap), { type: "start" });
-    state = reduceGame(state, { type: "move", direction: "right" });
     state = reduceGame(state, { type: "placeBomb" });
-    state = reduceGame(state, { type: "move", direction: "left" });
-    state = reduceGame(state, { type: "move", direction: "down" });
+    state = reduceGame(state, { type: "setMovement", vector: { x: 1, y: 1 } });
+    state = reduceGame(state, { type: "tick", deltaMs: 400 });
+    state = reduceGame(state, { type: "setMovement", vector: { x: 0, y: 0 } });
     state = reduceGame(state, { type: "tick", deltaMs: 1900 });
 
     expect(state.tiles[1]?.[3]).toBe(0);
@@ -36,4 +37,3 @@ describe("game reducer", () => {
     expect(state.phase).toBe("won");
   });
 });
-

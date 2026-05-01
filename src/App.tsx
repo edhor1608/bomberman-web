@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./index.css";
 import { legacyMaps, type LegacyMapInfo } from "./assets/legacyMaps";
 import { parseLegacyMap, type LegacyMap } from "./game/map/legacyMapParser";
+import { createRandomMap } from "./game/map/randomMap";
 import { createGameState } from "./game/state/gameState";
 import { reduceGame } from "./game/state/gameReducer";
-import type { Direction, GameInput, GameState } from "./game/state/types";
+import type { BombType, GameInput, GameState, Position } from "./game/state/types";
 import { readHighscores, saveHighscore, type HighscoreEntry } from "./persistence/highscores";
 import { BoardScene } from "./render/BoardScene";
 
@@ -24,6 +25,17 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+
+    if (selectedMap.path === "generated:random") {
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          const map = createRandomMap();
+          setLoadedMap(map);
+          setGameState(createGameState(map));
+        }
+      });
+      return undefined;
+    }
 
     fetch(selectedMap.path)
       .then((response) => {
@@ -80,21 +92,21 @@ export default function App() {
       return undefined;
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      const directionByKey: Partial<Record<string, Direction>> = {
-        ArrowUp: "up",
-        KeyW: "up",
-        ArrowDown: "down",
-        KeyS: "down",
-        ArrowLeft: "left",
-        KeyA: "left",
-        ArrowRight: "right",
-        KeyD: "right",
-      };
+    const pressed = new Set<string>();
+    const updateMovement = () => {
+      dispatch({ type: "setMovement", vector: movementFromKeys(pressed) });
+    };
 
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.code === "Space") {
         event.preventDefault();
         dispatch({ type: "placeBomb" });
+        return;
+      }
+
+      const bombType = bombTypeByKey[event.code];
+      if (bombType !== undefined) {
+        dispatch({ type: "selectBomb", bombType });
         return;
       }
 
@@ -103,20 +115,38 @@ export default function App() {
         return;
       }
 
-      const direction = directionByKey[event.code];
-      if (direction !== undefined) {
+      if (movementKeys.has(event.code)) {
         event.preventDefault();
-        dispatch({ type: "move", direction });
+        pressed.add(event.code);
+        updateMovement();
+      }
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (movementKeys.has(event.code)) {
+        pressed.delete(event.code);
+        updateMovement();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      dispatch({ type: "setMovement", vector: { x: 0, y: 0 } });
+    };
   }, [dispatch, screen]);
 
   const startGame = () => {
-    dispatch({ type: "reset" });
-    dispatch({ type: "start" });
+    if (selectedMap.path === "generated:random") {
+      const map = createRandomMap();
+      setLoadedMap(map);
+      setGameState(reduceGame(createGameState(map), { type: "start" }));
+    } else {
+      dispatch({ type: "reset" });
+      dispatch({ type: "start" });
+    }
     setScreen("playing");
   };
 
@@ -211,9 +241,13 @@ function GameScreen({
         </div>
         <div>
           <strong>
-            {state.clearedCrates}/{state.totalCrates}
+            {state.enemies.filter((enemy) => enemy.alive).length}
           </strong>
-          <span>Crates</span>
+          <span>AI</span>
+        </div>
+        <div>
+          <strong>{state.selectedBombType}</strong>
+          <span>Bomb</span>
         </div>
         <button type="button" className="secondary" onClick={onExit}>
           Menu
@@ -231,24 +265,75 @@ function GameScreen({
         ) : null}
       </div>
       <footer className="controls">
-        <button type="button" onClick={() => dispatch({ type: "move", direction: "up" })}>
+        <button type="button" onPointerDown={() => move(dispatch, screenDirectionVectors.up)} onPointerUp={() => stop(dispatch)} onPointerCancel={() => stop(dispatch)} onPointerLeave={() => stop(dispatch)}>
           Up
         </button>
-        <button type="button" onClick={() => dispatch({ type: "move", direction: "left" })}>
+        <button type="button" onPointerDown={() => move(dispatch, screenDirectionVectors.left)} onPointerUp={() => stop(dispatch)} onPointerCancel={() => stop(dispatch)} onPointerLeave={() => stop(dispatch)}>
           Left
         </button>
         <button type="button" onClick={() => dispatch({ type: "placeBomb" })}>
           Bomb
         </button>
-        <button type="button" onClick={() => dispatch({ type: "move", direction: "right" })}>
+        <button type="button" onPointerDown={() => move(dispatch, screenDirectionVectors.right)} onPointerUp={() => stop(dispatch)} onPointerCancel={() => stop(dispatch)} onPointerLeave={() => stop(dispatch)}>
           Right
         </button>
-        <button type="button" onClick={() => dispatch({ type: "move", direction: "down" })}>
+        <button type="button" onPointerDown={() => move(dispatch, screenDirectionVectors.down)} onPointerUp={() => stop(dispatch)} onPointerCancel={() => stop(dispatch)} onPointerLeave={() => stop(dispatch)}>
           Down
         </button>
+        <select value={state.selectedBombType} onChange={(event) => dispatch({ type: "selectBomb", bombType: event.target.value as BombType })}>
+          <option value="standard">Standard</option>
+          <option value="quick">Quick</option>
+          <option value="mega">Mega</option>
+        </select>
       </footer>
     </section>
   );
+}
+
+function move(dispatch: (input: GameInput) => void, vector: Position) {
+  dispatch({ type: "setMovement", vector });
+}
+
+const movementKeys = new Set(["ArrowUp", "KeyW", "ArrowDown", "KeyS", "ArrowLeft", "KeyA", "ArrowRight", "KeyD"]);
+
+const screenDirectionVectors = {
+  up: { x: -1, y: -1 },
+  down: { x: 1, y: 1 },
+  left: { x: -1, y: 1 },
+  right: { x: 1, y: -1 },
+} as const satisfies Record<string, Position>;
+
+const bombTypeByKey: Partial<Record<string, BombType>> = {
+  Digit1: "standard",
+  Digit2: "quick",
+  Digit3: "mega",
+};
+
+function movementFromKeys(keys: ReadonlySet<string>): Position {
+  const vector = { x: 0, y: 0 };
+
+  if (keys.has("ArrowUp") || keys.has("KeyW")) {
+    vector.x += screenDirectionVectors.up.x;
+    vector.y += screenDirectionVectors.up.y;
+  }
+  if (keys.has("ArrowDown") || keys.has("KeyS")) {
+    vector.x += screenDirectionVectors.down.x;
+    vector.y += screenDirectionVectors.down.y;
+  }
+  if (keys.has("ArrowLeft") || keys.has("KeyA")) {
+    vector.x += screenDirectionVectors.left.x;
+    vector.y += screenDirectionVectors.left.y;
+  }
+  if (keys.has("ArrowRight") || keys.has("KeyD")) {
+    vector.x += screenDirectionVectors.right.x;
+    vector.y += screenDirectionVectors.right.y;
+  }
+
+  return vector;
+}
+
+function stop(dispatch: (input: GameInput) => void) {
+  dispatch({ type: "setMovement", vector: { x: 0, y: 0 } });
 }
 
 function HighscoresScreen({ highscores, onBack }: { readonly highscores: readonly HighscoreEntry[]; readonly onBack: () => void }) {

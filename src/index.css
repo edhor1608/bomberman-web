@@ -141,7 +141,7 @@ select {
 
 .hud {
   display: grid;
-  grid-template-columns: 1fr repeat(2, auto) auto;
+  grid-template-columns: 1fr repeat(3, auto) auto;
   gap: 12px;
   align-items: center;
   padding: 14px 18px;

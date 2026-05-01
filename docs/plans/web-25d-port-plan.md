@@ -385,6 +385,8 @@ Acceptance:
 - Reloading a map resets state cleanly.
 - Input code does not import Three.js.
 
+Update: movement is now continuous in board coordinates and screen-direction controls are mapped to the fixed 2.5D camera. Arrow down moves visually down, not raw grid `+y`.
+
 ### Phase 6: Bombs And Explosions
 
 Deliverables:
@@ -401,6 +403,23 @@ Acceptance:
 - Explosions follow grid rules.
 - Explosions stop at non-passable blockers.
 - Explosion rendering is purely visual.
+
+Update: standard, quick, and mega bombs are implemented with different fuse, range, limit, and scoring values.
+
+### Phase 6B: AI Opponents And Random Maps
+
+Deliverables:
+
+- Add simple AI opponents that move in continuous board space and chase the player conservatively.
+- Add random map generation with preserved outer walls, legacy crate semantics, and an open starter route.
+- Keep random maps compatible with the same `LegacyMap` shape as file-backed maps.
+
+Acceptance:
+
+- AI opponents can kill the player on contact.
+- AI opponents can be killed by explosions.
+- Random maps do not block the player's initial movement.
+- Random maps use the same renderer and reducer paths as legacy maps.
 
 ### Phase 7: Destruction, Scoring, And Highscores
 
@@ -467,4 +486,3 @@ Acceptance:
 3. Copy or expose legacy `maps/*.map`, `images/MainMenuBackground.png`, and `font/fixedsys.ttf` to the web asset path without changing the originals.
 4. Implement and test `legacyMapParser`.
 5. Render `level1.map` in a static React Three Fiber scene.
-

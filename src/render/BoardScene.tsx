@@ -2,7 +2,7 @@ import { OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo } from "react";
 import { getTileDefinition } from "../game/map/tileCatalog";
-import type { GameInput, GameState, Position } from "../game/state/types";
+import type { BombType, GameInput, GameState, Position } from "../game/state/types";
 
 type BoardSceneProps = {
   readonly state: GameState;
@@ -42,14 +42,19 @@ function Board({ state }: { readonly state: GameState }) {
         <meshStandardMaterial color="#172033" />
       </mesh>
       {state.tiles.map((row, y) =>
-        row.map((tile, x) => <TileMesh key={`${x}-${y}-${tile}`} position={{ x, y }} tile={tile} />),
+        row.map((tile, x) => <TileMesh key={`${x}-${y}-${tile}`} position={{ x: x + 0.5, y: y + 0.5 }} tile={tile} />),
       )}
       {state.bombs.map((bomb) => (
-        <BombMesh key={bomb.id} position={bomb.position} />
+        <BombMesh key={bomb.id} position={bomb.position} type={bomb.type} />
       ))}
       {state.explosions.flatMap((explosion) =>
         explosion.cells.map((cell) => <ExplosionMesh key={`${explosion.id}-${cell.x}-${cell.y}`} position={cell} />),
       )}
+      {state.enemies
+        .filter((enemy) => enemy.alive)
+        .map((enemy) => (
+          <EnemyMesh key={enemy.id} position={enemy.position} />
+        ))}
       <PlayerMesh position={state.player.position} alive={state.player.alive} />
     </group>
   );
@@ -98,11 +103,26 @@ function PlayerMesh({ position, alive }: { readonly position: Position; readonly
   );
 }
 
-function BombMesh({ position }: { readonly position: Position }) {
+function BombMesh({ position, type }: { readonly position: Position; readonly type: BombType }) {
+  const colorByType = {
+    standard: "#080808",
+    quick: "#1d4ed8",
+    mega: "#7f1d1d",
+  } as const satisfies Record<BombType, string>;
+
   return (
     <mesh castShadow position={[position.x, 0.34, position.y]}>
       <sphereGeometry args={[0.28, 24, 24]} />
-      <meshStandardMaterial color="#080808" roughness={0.28} metalness={0.35} />
+      <meshStandardMaterial color={colorByType[type]} roughness={0.28} metalness={0.35} />
+    </mesh>
+  );
+}
+
+function EnemyMesh({ position }: { readonly position: Position }) {
+  return (
+    <mesh castShadow position={[position.x, 0.32, position.y]}>
+      <boxGeometry args={[0.48, 0.56, 0.48]} />
+      <meshStandardMaterial color="#dc2626" roughness={0.5} />
     </mesh>
   );
 }
@@ -117,4 +137,3 @@ function ExplosionMesh({ position }: { readonly position: Position }) {
     </mesh>
   );
 }
-
