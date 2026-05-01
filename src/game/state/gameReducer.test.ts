@@ -60,19 +60,22 @@ describe("game reducer", () => {
 
   it("does not trap the player inside a freshly placed bomb", () => {
     let state = reduceGame(createGameState(tinyMap), { type: "start" });
-    state = reduceGame(state, { type: "setMovement", vector: { x: 1, y: 0 } });
-    state = reduceGame(state, { type: "tick", deltaMs: 180 });
     state = reduceGame(state, { type: "placeBomb" });
 
     const beforeMove = state.player.position;
-    state = reduceGame(state, { type: "setMovement", vector: { x: 0, y: 1 } });
-    state = reduceGame(state, { type: "tick", deltaMs: 180 });
+    state = reduceGame(state, { type: "setMovement", vector: { x: 1, y: 0 } });
+    state = reduceGame(state, { type: "tick", deltaMs: 100 });
 
-    expect(state.bombs[0]?.position).not.toEqual({
-      x: Math.floor(beforeMove.x) + 0.5,
-      y: Math.floor(beforeMove.y) + 0.5,
-    });
-    expect(state.player.position.y).toBeGreaterThan(beforeMove.y);
+    expect(state.bombs[0]?.position).toEqual({ x: 1.5, y: 1.5 });
+    expect(state.player.position.x).toBeGreaterThan(beforeMove.x);
+  });
+
+  it("places bombs in the current movement direction when that adjacent cell is open", () => {
+    let state = reduceGame(createGameState(openMap), { type: "start" });
+    state = reduceGame(state, { type: "setMovement", vector: { x: 1, y: 0 } });
+    state = reduceGame(state, { type: "placeBomb" });
+
+    expect(state.bombs[0]?.position).toEqual({ x: 2.5, y: 1.5 });
   });
 
   it("moves AI opponents toward the player", () => {

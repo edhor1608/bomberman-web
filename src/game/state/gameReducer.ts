@@ -6,7 +6,6 @@ const explosionMs = 520;
 const playerSpeed = 4.2;
 const enemySpeed = 2.15;
 const actorRadius = 0.28;
-const bombRadius = 0.34;
 const enemyTouchRadius = 0.48;
 
 const bombConfigs = {
@@ -111,15 +110,8 @@ function placeBomb(state: GameState): GameState {
 function getBombPlacement(state: GameState): Position {
   const playerCell = snapToCellCenter(state.player.position);
   const movement = state.input;
-  const opposite = movement.x !== 0 || movement.y !== 0 ? normalize({ x: -movement.x, y: -movement.y }) : { x: 0, y: 0 };
-  const candidates = [
-    snapToCellCenter(add(state.player.position, opposite, 0.9)),
-    snapToCellCenter(state.player.position),
-    { x: playerCell.x - 1, y: playerCell.y },
-    { x: playerCell.x + 1, y: playerCell.y },
-    { x: playerCell.x, y: playerCell.y - 1 },
-    { x: playerCell.x, y: playerCell.y + 1 },
-  ] satisfies readonly Position[];
+  const target = movement.x !== 0 || movement.y !== 0 ? snapToCellCenter(add(playerCell, dominantAxis(movement), 1)) : playerCell;
+  const candidates = [target, playerCell] satisfies readonly Position[];
 
   return candidates.find((candidate) => canPlaceBombAt(state, candidate)) ?? playerCell;
 }
@@ -128,8 +120,7 @@ function canPlaceBombAt(state: GameState, position: Position): boolean {
   return (
     isInside(state, position) &&
     getTileDefinition(tileAt(state, position)).passable &&
-    !state.bombs.some((bomb) => sameCell(bomb.position, position)) &&
-    distance(position, state.player.position) >= actorRadius + bombRadius
+    !state.bombs.some((bomb) => sameCell(bomb.position, position))
   );
 }
 
@@ -276,11 +267,11 @@ function canStandAt(state: GameState, position: Position, radius: number): boole
     { x: position.x + radius, y: position.y + radius },
   ] as const satisfies readonly Position[];
 
-  if (state.bombs.some((bomb) => distance(bomb.position, position) < bombRadius)) {
-    return false;
-  }
-
   return checks.every((check) => isInside(state, check) && getTileDefinition(tileAt(state, check)).passable);
+}
+
+function dominantAxis(vector: Position): Position {
+  return Math.abs(vector.x) >= Math.abs(vector.y) ? { x: Math.sign(vector.x), y: 0 } : { x: 0, y: Math.sign(vector.y) };
 }
 
 function directionToVector(direction: Direction): Position {
