@@ -6,6 +6,7 @@ import { createRandomMap } from "./game/map/randomMap";
 import { createGameState } from "./game/state/gameState";
 import { reduceGame } from "./game/state/gameReducer";
 import type { BombType, GameInput, GameState, Position } from "./game/state/types";
+import { bombTypeByKey, movementFromKeys, movementKeys, screenDirectionVectors } from "./input/inputMapping";
 import { readHighscores, saveHighscore, type HighscoreEntry } from "./persistence/highscores";
 import { BoardScene } from "./render/BoardScene";
 
@@ -292,44 +293,6 @@ function GameScreen({
 
 function move(dispatch: (input: GameInput) => void, vector: Position) {
   dispatch({ type: "setMovement", vector });
-}
-
-const movementKeys = new Set(["ArrowUp", "KeyW", "ArrowDown", "KeyS", "ArrowLeft", "KeyA", "ArrowRight", "KeyD"]);
-
-const screenDirectionVectors = {
-  up: { x: -1, y: -1 },
-  down: { x: 1, y: 1 },
-  left: { x: -1, y: 1 },
-  right: { x: 1, y: -1 },
-} as const satisfies Record<string, Position>;
-
-const bombTypeByKey: Partial<Record<string, BombType>> = {
-  Digit1: "standard",
-  Digit2: "quick",
-  Digit3: "mega",
-};
-
-function movementFromKeys(keys: ReadonlySet<string>): Position {
-  const vector = { x: 0, y: 0 };
-
-  if (keys.has("ArrowUp") || keys.has("KeyW")) {
-    vector.x += screenDirectionVectors.up.x;
-    vector.y += screenDirectionVectors.up.y;
-  }
-  if (keys.has("ArrowDown") || keys.has("KeyS")) {
-    vector.x += screenDirectionVectors.down.x;
-    vector.y += screenDirectionVectors.down.y;
-  }
-  if (keys.has("ArrowLeft") || keys.has("KeyA")) {
-    vector.x += screenDirectionVectors.left.x;
-    vector.y += screenDirectionVectors.left.y;
-  }
-  if (keys.has("ArrowRight") || keys.has("KeyD")) {
-    vector.x += screenDirectionVectors.right.x;
-    vector.y += screenDirectionVectors.right.y;
-  }
-
-  return vector;
 }
 
 function stop(dispatch: (input: GameInput) => void) {
