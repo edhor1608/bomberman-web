@@ -3,10 +3,10 @@ import type { BombType, Position } from "../game/state/types";
 export const movementKeys = new Set(["ArrowUp", "KeyW", "ArrowDown", "KeyS", "ArrowLeft", "KeyA", "ArrowRight", "KeyD"]);
 
 export const screenDirectionVectors = {
-  up: { x: -1, y: -1 },
-  down: { x: 1, y: 1 },
-  left: { x: -1, y: 1 },
-  right: { x: 1, y: -1 },
+  up: { x: -0.3383236550709802, y: -0.4962080274374376 },
+  down: { x: 0.3383236550709802, y: 0.4962080274374376 },
+  left: { x: -0.8262273428075476, y: 0.5633368246415098 },
+  right: { x: 0.8262273428075476, y: -0.5633368246415098 },
 } as const satisfies Record<string, Position>;
 
 export const bombTypeByKey: Partial<Record<string, BombType>> = {
@@ -37,4 +37,3 @@ export function movementFromKeys(keys: ReadonlySet<string>): Position {
 
   return vector;
 }
-
